@@ -12,7 +12,7 @@ public class BaseResult<R> {
         this.result = result;
     }
 
-    public static <T> BaseResult<T> success(T result) {
+    public static <T> BaseResult<T>  success(T result) {
         return new BaseResult<T>(1, "success", result);
     }
 

@@ -8,26 +8,31 @@ import org.springframework.stereotype.Service;
 public class UserPointAccountManagerImpl implements UserPointAccountManager {
 
     @Override
-    public void createAccount(UserPointAccountDO userPointAccount) {
+    public void insert(UserPointAccountDO userPointAccount) {
 
     }
 
     @Override
-    public UserPointAccountDO queryAccount(String userId, String pointType) {
+    public UserPointAccountDO query(String userId, String pointType) {
         return null;
     }
 
     @Override
     public UserPointAccountDO initAndGet(String userId, String pointType) {
-        UserPointAccountDO userPointAccount = queryAccount(userId, pointType);
+        UserPointAccountDO userPointAccount = query(userId, pointType);
         if (userPointAccount == null) {
             // 并发问题由数据库唯一键(userId, pointType)处理, 并发创建报错
             userPointAccount = new UserPointAccountDO();
             userPointAccount.setUserId(userId);
             userPointAccount.setPointType(pointType);
-            createAccount(userPointAccount);
+            insert(userPointAccount);
         }
         return userPointAccount;
+    }
+
+    @Override
+    public int update(UserPointAccountDO userPointAccount) {
+        return 0;
     }
 
 }

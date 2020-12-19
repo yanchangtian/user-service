@@ -6,12 +6,12 @@ import org.springframework.stereotype.Service;
 @Service
 public interface UserPointAccountManager {
 
-    void createAccount(UserPointAccountDO userPointAccount);
+    void insert(UserPointAccountDO userPointAccount);
 
-    UserPointAccountDO queryAccount(String userId, String pointType);
+    UserPointAccountDO query(String userId, String pointType);
 
     UserPointAccountDO initAndGet(String userId, String pointType);
 
-    Integer updateAccount(UserPointAccountDO userPointAccount);
+    int update(UserPointAccountDO userPointAccount);
 
 }
