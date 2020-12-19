@@ -11,6 +11,7 @@ import com.yan.study.biz.manager.point.UserPointDetailManager;
 
 import javax.annotation.Resource;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 public class UserPointBizManagerImpl implements UserPointBizManager {
@@ -91,6 +92,9 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
     @Override
     public BaseResult<Void> givePoints(String userId, String pointType, Long points, String idempotentId, String reason) {
         try {
+            // 0.1 幂等判断
+
+
             // 1.更新账户
             UserPointAccountDO userPointAccount = userPointAccountManager.initAndGet(userId, pointType);
             userPointAccount.setAvailablePoint(userPointAccount.getAvailablePoint() + points);
@@ -115,6 +119,31 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
         }
     }
 
-    
+    @Override
+    public BaseResult<String> freezePoints(String userId, String pointType, Long points, String idempotentId, String reason) {
+        try {
+            // 1.更新用户账户
+            UserPointAccountDO userPointAccount = userPointAccountManager.initAndGet(userId, pointType);
+            if (userPointAccount.getAvailablePoint() < points) {
+                return BaseResult.fail("可用积分不足");
+            }
+            userPointAccount.setAvailablePoint(userPointAccount.getAvailablePoint() - points);
+            userPointAccount.setFreezePoint(userPointAccount.getFreezePoint() + points);
+            int i = userPointAccountManager.update(userPointAccount);
+            if (i < 1) {
+                throw new PointSystemException("并发更新用户账户");
+            }
+
+            // 2.查询积分明细
+            List<UserPointDetailDO> userPointDetailList = userPointDetailManager.queryAvailablePointRecord(userId, pointType);
+
+            // 3.冻结积分明细
+
+            return BaseResult.success(null);
+        } catch (Exception e) {
+            return BaseResult.fail("冻结失败");
+        }
+    }
+
 
 }

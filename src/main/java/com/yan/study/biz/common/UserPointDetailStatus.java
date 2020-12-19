@@ -46,7 +46,7 @@ public enum UserPointDetailStatus {
     }
 
     public String getStatus() {
-        return this.status;
+        return status;
     }
 
 }
