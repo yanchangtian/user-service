@@ -3,16 +3,16 @@ package com.yan.study.biz.manager.point.impl;
 import com.yan.study.biz.common.BaseResult;
 import com.yan.study.biz.common.PointSystemException;
 import com.yan.study.biz.common.UserPointDetailStatus;
+import com.yan.study.biz.common.UserPointFreezeRecordStatus;
 import com.yan.study.biz.dao.point.entity.UserPointAccountDO;
 import com.yan.study.biz.dao.point.entity.UserPointDetailDO;
-import com.yan.study.biz.manager.point.UserPointAccountManager;
-import com.yan.study.biz.manager.point.UserPointBizManager;
-import com.yan.study.biz.manager.point.UserPointDetailManager;
+import com.yan.study.biz.dao.point.entity.UserPointFreezeRecordDO;
+import com.yan.study.biz.dao.point.entity.UserPointFreezeRecordDetailDO;
+import com.yan.study.biz.manager.point.*;
+import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Resource;
-import java.util.Date;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 public class UserPointBizManagerImpl implements UserPointBizManager {
 
@@ -20,6 +20,10 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
     private UserPointAccountManager userPointAccountManager;
     @Resource
     private UserPointDetailManager userPointDetailManager;
+    @Resource
+    private UserPointFreezeRecordManager userPointFreezeRecordManager;
+    @Resource
+    private UserPointFreezeRecordDetailManager userPointFreezeRecordDetailManager;
 
     @Override
     // 事务标签
@@ -138,6 +142,58 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
             List<UserPointDetailDO> userPointDetailList = userPointDetailManager.queryAvailablePointRecord(userId, pointType);
 
             // 3.冻结积分明细
+
+            // 3.1 全部冻结列表
+            List<UserPointDetailDO> allFreezeList = new ArrayList<>();
+            // K detailCode V points
+            Map<String, Long> detailCodeMap = new HashMap<>();
+            Long needFreezePoints = points;
+
+            for (UserPointDetailDO userPointDetail : userPointDetailList) {
+                Long availablePoints = userPointDetail.getAvailablePoints();
+                if (needFreezePoints < availablePoints) {
+                    // 部分冻结
+                    userPointDetailManager.freezeDetailWithPortion(userPointDetail, needFreezePoints);
+                    detailCodeMap.put(userPointDetail.getDetailCode(), needFreezePoints);
+                    break;
+                } else if (needFreezePoints.equals(availablePoints)) {
+                    // 全部冻结
+                    allFreezeList.add(userPointDetail);
+                    detailCodeMap.put(userPointDetail.getDetailCode(), needFreezePoints);
+                    break;
+                } else {
+                    needFreezePoints = needFreezePoints - availablePoints;
+                    allFreezeList.add(userPointDetail);
+                    detailCodeMap.put(userPointDetail.getDetailCode(), availablePoints);
+                }
+            }
+
+            // 3.2 冻结全部冻结列表
+            if (!CollectionUtils.isEmpty(allFreezeList)) {
+                userPointDetailManager.freezeDetailWithAll(allFreezeList);
+            }
+            // 4. 新增冻结记录
+            UserPointFreezeRecordDO userPointFreezeRecord = new UserPointFreezeRecordDO();
+            userPointFreezeRecord.setUserId(userId);
+            userPointFreezeRecord.setPointType(pointType);
+            userPointFreezeRecord.setFreezeCode(UUID.randomUUID().toString());
+            userPointFreezeRecord.setIdempotentId(idempotentId);
+            userPointFreezeRecord.setFreezeReason(reason);
+            userPointFreezeRecord.setFreezePoints(points);
+            userPointFreezeRecord.setFreezeTime(new Date());
+            userPointFreezeRecord.setFreezeRecordStatus(UserPointFreezeRecordStatus.FREEZED.getStatus());
+            userPointFreezeRecordManager.insert(userPointFreezeRecord);
+
+            // 5. 新增冻结明细记录
+            for (String detailCode : detailCodeMap.keySet()) {
+                UserPointFreezeRecordDetailDO userPointFreezeRecordDetail = new UserPointFreezeRecordDetailDO();
+                userPointFreezeRecordDetail.setUserId(userId);
+                userPointFreezeRecordDetail.setPointType(pointType);
+                userPointFreezeRecordDetail.setDetailCode();
+                userPointFreezeRecordDetail.setFreezeCode();
+                userPointFreezeRecordDetail.setFreezePoints(detailCodeMap.get(detailCode));
+
+            }
 
             return BaseResult.success(null);
         } catch (Exception e) {
