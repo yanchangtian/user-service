@@ -36,4 +36,12 @@ public interface UserPointDetailManager {
      */
     void freezeDetailWithPortion(UserPointDetailDO userPointDetail, Long points);
 
+    /**
+     *
+     *
+     * @param idempotentId
+     * @return
+     */
+    UserPointDetailDO queryByUserIdAndIdempotentId(String userId, String idempotentId);
+
 }

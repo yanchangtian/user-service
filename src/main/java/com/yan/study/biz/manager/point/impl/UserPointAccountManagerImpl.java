@@ -35,4 +35,9 @@ public class UserPointAccountManagerImpl implements UserPointAccountManager {
         return 0;
     }
 
+    @Override
+    public void increasePoints(String userId, String pointType, Long availablePoints) {
+
+    }
+
 }

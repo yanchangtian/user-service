@@ -14,4 +14,6 @@ public interface UserPointAccountManager {
 
     int update(UserPointAccountDO userPointAccount);
 
+    void increasePoints(String userId, String pointType, Long availablePoints);
+
 }
