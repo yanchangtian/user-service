@@ -228,12 +228,67 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
     private void mergePoint(String userId, UserPointDetailDO userPointDetail) {
         // 查询是否有当日的合并记录
         String mergeIdemId = "merge.prefix_" + userId + "_" + DateUtil.format(new Date());
-        UserPointDetailDO mergeUserPointDetail = userPointDetailManager.queryByUserIdAndIdempotentId(userId,     mergeIdemId);
+        UserPointDetailDO mergeDetail = userPointDetailManager.queryByUserIdAndIdempotentId(userId, mergeIdemId);
 
         // 如果没有创建一条新的合并记录
 
+        if (mergeDetail == null) {
 
-        // 如果有则合并进去
+            PointConfigDO pointConfig = pointConfigManager.getPointConfig(userPointDetail.getPointType());
+
+            mergeDetail = new UserPointDetailDO();
+            mergeDetail.setUserId(userId);
+            mergeDetail.setPointType(userPointDetail.getPointType());
+            mergeDetail.setDetailCode(UUID.randomUUID().toString().replaceAll("-", ""));
+            mergeDetail.setIdempotentId(mergeIdemId);
+            mergeDetail.setGiveReason("合并积分");
+            mergeDetail.setEffectTime(userPointDetail.getEffectTime());
+            // 为什么不需要计算失效时间
+            mergeDetail.setExpireTime(pointConfig.calcPointExpireTime(userPointDetail.getEffectTime()));
+            mergeDetail.setGivePoints(userPointDetail.getGivePoints());
+            mergeDetail.setAvailablePoints(userPointDetail.getAvailablePoints());
+            mergeDetail.setDetailStatus(UserPointDetailStatus.RECEIVED.getStatus());
+            userPointDetailManager.insert(mergeDetail);
+        } else {
+            int i = 0;
+            // 如果有则合并进去
+            if (UserPointDetailStatus.RECEIVED.getStatus().equals(mergeDetail.getDetailStatus())) {
+                mergeDetail.setGivePoints(mergeDetail.getGivePoints() + userPointDetail.getGivePoints());
+                mergeDetail.setAvailablePoints(mergeDetail.getAvailablePoints() + userPointDetail.getAvailablePoints());
+                i = userPointDetailManager.update(mergeDetail);
+            } else if (UserPointDetailStatus.FROZEN.getStatus().equals(mergeDetail.getDetailStatus())) {
+                mergeDetail.setGivePoints(mergeDetail.getGivePoints() + userPointDetail.getGivePoints());
+                mergeDetail.setAvailablePoints(mergeDetail.getAvailablePoints() + userPointDetail.getAvailablePoints());
+                mergeDetail.setDetailStatus(UserPointDetailStatus.PART_FROZEN.getStatus());
+                i = userPointDetailManager.update(mergeDetail);
+            } else if (UserPointDetailStatus.PART_FROZEN.getStatus().equals(mergeDetail.getDetailStatus())) {
+                mergeDetail.setGivePoints(mergeDetail.getGivePoints() + userPointDetail.getGivePoints());
+                mergeDetail.setAvailablePoints(mergeDetail.getAvailablePoints() + userPointDetail.getAvailablePoints());
+                i = userPointDetailManager.update(mergeDetail);
+            } else if (UserPointDetailStatus.CONSUMED.getStatus().equals(mergeDetail.getDetailStatus())) {
+                mergeDetail.setGivePoints(mergeDetail.getGivePoints() + userPointDetail.getGivePoints());
+                mergeDetail.setAvailablePoints(mergeDetail.getAvailablePoints() + userPointDetail.getAvailablePoints());
+                mergeDetail.setDetailStatus(UserPointDetailStatus.RECEIVED.getStatus());
+                i = userPointDetailManager.update(mergeDetail);
+            } else {
+                throw new PointSystemException("不支持的合并类型");
+            }
+
+            if (i < 1) {
+                throw new PointSystemException("并发冲突");
+            }
+
+        }
+
+        // 将合并记录更新为已合并状态
+        userPointDetail.setMergedPoints(userPointDetail.getAvailablePoints());
+        userPointDetail.setAvailablePoints(0L);
+        userPointDetail.setMergedTime(new Date());
+        userPointDetail.setDetailStatus(UserPointDetailStatus.MERGED.getStatus());
+        int i = userPointDetailManager.update(userPointDetail);
+        if (i < 1) {
+            throw new PointSystemException("并发更新");
+        }
 
     }
 

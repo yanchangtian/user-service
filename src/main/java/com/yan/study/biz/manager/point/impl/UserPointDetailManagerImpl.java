@@ -63,4 +63,9 @@ public class UserPointDetailManagerImpl implements UserPointDetailManager {
         }
     }
 
+    @Override
+    public UserPointDetailDO queryByUserIdAndIdempotentId(String userId, String idempotentId) {
+        return null;
+    }
+
 }

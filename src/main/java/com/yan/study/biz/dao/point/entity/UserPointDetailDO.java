@@ -45,6 +45,10 @@ public class UserPointDetailDO {
      * 已过期积分
      */
     private Long expiredPoints;
+    /**
+     * 合并积分
+     */
+    private Long mergedPoints;
 
     // ----- 时间数据 -----
     /**
