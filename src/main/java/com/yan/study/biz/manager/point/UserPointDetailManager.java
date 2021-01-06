@@ -22,19 +22,19 @@ public interface UserPointDetailManager {
     List<UserPointDetailDO> queryAvailablePointRecord(String userId, String pointType);
 
     /**
-     * 全部冻结积分详情
-     *
-     * @param allFreezeList 积分集合
-     */
-    void freezeDetailWithAll(List<UserPointDetailDO> allFreezeList);
-
-    /**
      * 部分冻结积分详情
      *
      * @param userPointDetail 积分详情
      * @param points 冻结积分数量
      */
     void freezeDetailWithPortion(UserPointDetailDO userPointDetail, Long points);
+
+    /**
+     * 全部冻结积分详情
+     *
+     * @param allFreezeList 积分集合
+     */
+    void freezeDetailWithAll(List<UserPointDetailDO> allFreezeList);
 
     /**
      *

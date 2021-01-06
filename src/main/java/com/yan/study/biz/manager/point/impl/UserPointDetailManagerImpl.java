@@ -33,10 +33,6 @@ public class UserPointDetailManagerImpl implements UserPointDetailManager {
     public void freezeDetailWithAll(List<UserPointDetailDO> allFreezeList) {
         // 必须保证全部成功, 否则抛出异常
         for (UserPointDetailDO userPointDetail : allFreezeList) {
-            if (!UserPointDetailStatus.RECEIVABLE.getStatus().equals(userPointDetail.getDetailStatus())
-                && !UserPointDetailStatus.PART_FROZEN.getStatus().equals(userPointDetail.getDetailStatus())) {
-                throw new PointSystemException("冻结明细状态异常");
-            }
             userPointDetail.setFreezePoints(userPointDetail.getFreezePoints() + userPointDetail.getAvailablePoints());
             userPointDetail.setAvailablePoints(0L);
             userPointDetail.setDetailStatus(UserPointDetailStatus.FROZEN.getStatus());
@@ -50,12 +46,8 @@ public class UserPointDetailManagerImpl implements UserPointDetailManager {
 
     @Override
     public void freezeDetailWithPortion(UserPointDetailDO userPointDetail, Long points) {
-        if (!UserPointDetailStatus.RECEIVABLE.getStatus().equals(userPointDetail.getDetailStatus())
-            && !UserPointDetailStatus.PART_FROZEN.getStatus().equals(userPointDetail.getDetailStatus())) {
-            throw new PointSystemException("冻结明细状态异常");
-        }
-        userPointDetail.setFreezePoints(userPointDetail.getFreezePoints() + userPointDetail.getAvailablePoints());
-        userPointDetail.setAvailablePoints(0L);
+        userPointDetail.setFreezePoints(userPointDetail.getFreezePoints() + points);
+        userPointDetail.setAvailablePoints(userPointDetail.getAvailablePoints() - points);
         userPointDetail.setDetailStatus(UserPointDetailStatus.PART_FROZEN.getStatus());
         int i = update(userPointDetail);
         if (i < 1) {

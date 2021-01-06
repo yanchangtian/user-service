@@ -23,10 +23,11 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
 
     @Override
     // 事务标签
-    public BaseResult<String> preGivePoints(String userId, String pointType, Long points, String idempotentId, String reason) {
+    public BaseResult<String> preGivePoint(String userId, String pointType, Long points, String idempotentId, String reason) {
         try {
-            // 积分类型校验
+            // 幂等校验
 
+            // 积分类型校验
 
             // 获取积分类型配置
             PointConfigDO pointConfig = pointConfigManager.getPointConfig(pointType);
@@ -55,7 +56,7 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
     }
 
     @Override
-    public BaseResult<Void> receivePoints(String userId, String pointType, String detailCode) {
+    public BaseResult<Void> receivePoint(String userId, String pointType, String detailCode) {
         try {
             Date now = new Date();
 
@@ -90,7 +91,7 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
             userPointAccountManager.increasePoints(userId, pointType, userPointDetail.getAvailablePoints());
 
             // 3. 合并积分
-
+            mergePoint(userId, userPointDetail);
 
             return BaseResult.success(null);
         } catch (Exception e) {
@@ -99,7 +100,7 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
     }
 
     @Override
-    public BaseResult<Void> givePoints(String userId, String pointType, Long points, String idempotentId, String reason) {
+    public BaseResult<Void> givePoint(String userId, String pointType, Long points, String idempotentId, String reason) {
         try {
             // 0.1 幂等判断
 
@@ -126,7 +127,7 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
             userPointAccountManager.increasePoints(userId, pointType, userPointDetail.getAvailablePoints());
 
             // 4. 合并积分
-
+            mergePoint(userId, userPointDetail );
 
             return BaseResult.success(null);
         } catch (Exception e) {
@@ -135,30 +136,38 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
     }
 
     @Override
-    public BaseResult<String> freezePoints(String userId, String pointType, Long points, String idempotentId, String reason) {
+    public BaseResult<String> freezePoint(String userId, String pointType, Long freezePoints, String idempotentId, String reason) {
         try {
+            Date now = new Date();
+            // 检验幂等id
+
+            // 校验积分类型
+
             // 1.更新用户账户
             UserPointAccountDO userPointAccount = userPointAccountManager.initAndGet(userId, pointType);
-            if (userPointAccount.getAvailablePoint() < points) {
+            if (userPointAccount.getAvailablePoint() < freezePoints) {
                 return BaseResult.fail("可用积分不足");
             }
-            userPointAccount.setAvailablePoint(userPointAccount.getAvailablePoint() - points);
-            userPointAccount.setFreezePoint(userPointAccount.getFreezePoint() + points);
+            userPointAccount.setAvailablePoint(userPointAccount.getAvailablePoint() - freezePoints);
+            userPointAccount.setFreezePoint(userPointAccount.getFreezePoint() + freezePoints);
             int i = userPointAccountManager.update(userPointAccount);
             if (i < 1) {
                 throw new PointSystemException("并发更新用户账户");
             }
 
+            // 4. 新增冻结记录
+            UserPointFreezeRecordDO freezeRecord = userPointFreezeRecordManager.createFreezeRecord(userId, pointType,
+                idempotentId, reason, freezePoints, now, UserPointFreezeRecordStatus.FREEZED);
+
             // 2.查询积分明细
             List<UserPointDetailDO> userPointDetailList = userPointDetailManager.queryAvailablePointRecord(userId, pointType);
 
             // 3.冻结积分明细
-
-            // 3.1 全部冻结列表
+            // 全部冻结列表
             List<UserPointDetailDO> allFreezeList = new ArrayList<>();
-            // K detailCode V points
+            // K: detailCode V: points
             Map<String, Long> detailCodeMap = new HashMap<>();
-            Long needFreezePoints = points;
+            Long needFreezePoints = freezePoints;
 
             for (UserPointDetailDO userPointDetail : userPointDetailList) {
                 Long availablePoints = userPointDetail.getAvailablePoints();
@@ -173,7 +182,7 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
                     detailCodeMap.put(userPointDetail.getDetailCode(), needFreezePoints);
                     break;
                 } else {
-                    needFreezePoints = needFreezePoints - availablePoints;
+                    needFreezePoints -= availablePoints;
                     allFreezeList.add(userPointDetail);
                     detailCodeMap.put(userPointDetail.getDetailCode(), availablePoints);
                 }
@@ -183,33 +192,65 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
             if (!CollectionUtils.isEmpty(allFreezeList)) {
                 userPointDetailManager.freezeDetailWithAll(allFreezeList);
             }
-            // 4. 新增冻结记录
-            UserPointFreezeRecordDO userPointFreezeRecord = new UserPointFreezeRecordDO();
-            userPointFreezeRecord.setUserId(userId);
-            userPointFreezeRecord.setPointType(pointType);
-            userPointFreezeRecord.setFreezeCode(UUID.randomUUID().toString());
-            userPointFreezeRecord.setIdempotentId(idempotentId);
-            userPointFreezeRecord.setFreezeReason(reason);
-            userPointFreezeRecord.setFreezePoints(points);
-            userPointFreezeRecord.setFreezeTime(new Date());
-            userPointFreezeRecord.setFreezeRecordStatus(UserPointFreezeRecordStatus.FREEZED.getStatus());
-            userPointFreezeRecordManager.insert(userPointFreezeRecord);
 
             // 5. 新增冻结明细记录
             for (String detailCode : detailCodeMap.keySet()) {
                 UserPointFreezeRecordDetailDO userPointFreezeRecordDetail = new UserPointFreezeRecordDetailDO();
                 userPointFreezeRecordDetail.setUserId(userId);
                 userPointFreezeRecordDetail.setPointType(pointType);
-                userPointFreezeRecordDetail.setDetailCode("");
-                userPointFreezeRecordDetail.setFreezeCode("");
+                userPointFreezeRecordDetail.setDetailCode(detailCode);
+                userPointFreezeRecordDetail.setFreezeCode(freezeRecord.getFreezeCode());
                 userPointFreezeRecordDetail.setFreezePoints(detailCodeMap.get(detailCode));
+                userPointFreezeRecordDetailManager.insert(userPointFreezeRecordDetail);
+            }
 
+            return BaseResult.success(freezeRecord.getFreezeCode());
+        } catch (Exception e) {
+            return BaseResult.fail("冻结失败");
+        }
+    }
+
+    @Override
+    public BaseResult<Void> unfreezePoint(String userId, String pointType, String freezeRecordCode) {
+        try {
+            // 查询冻结记录, 判断状态
+            UserPointFreezeRecordDO freezeRecord = userPointFreezeRecordManager.queryByCode(userId, freezeRecordCode);
+
+            if (freezeRecord == null) {
+                return BaseResult.fail("冻结记录不存在");
+            }
+            if (UserPointFreezeRecordStatus.UNFROZE.getStatus().equals(freezeRecord.getFreezeRecordStatus())) {
+                return BaseResult.fail("已解冻");
+            }
+            if (UserPointFreezeRecordStatus.CONSUMED.getStatus().equals(freezeRecord.getFreezeRecordStatus())) {
+                return BaseResult.fail("已消耗");
+            }
+
+            // 1. 更新用户账户
+            UserPointAccountDO userPointAccount = userPointAccountManager.initAndGet(userId, pointType);
+            userPointAccount.setFreezePoint(userPointAccount.getFreezePoint() - freezeRecord.getFreezePoints());
+            userPointAccount.setAvailablePoint(userPointAccount.getAvailablePoint() + freezeRecord.getFreezePoints());
+            int i = userPointAccountManager.update(userPointAccount);
+            if (i < 1) {
+                throw new PointSystemException("并发更新积分账户");
+            }
+
+            // 2. 更新冻结记录
+            freezeRecord.setFreezeRecordStatus(UserPointFreezeRecordStatus.UNFROZE.getStatus());
+            i = userPointFreezeRecordManager.update(freezeRecord);
+            if (i < 1) {
+                throw new PointSystemException("并发修改冻结记录");
             }
 
             return BaseResult.success(null);
         } catch (Exception e) {
-            return BaseResult.fail("冻结失败");
+            return BaseResult.fail("解冻失败");
         }
+    }
+
+    @Override
+    public BaseResult<Void> consumeFreezePoint(String userId, String pointType, String freezeRecordCode) {
+        return null;
     }
 
     /**
@@ -219,10 +260,7 @@ public class UserPointBizManagerImpl implements UserPointBizManager {
      * @return 有效 true 无效 false
      */
     private boolean validPointConfig(PointConfigDO pointConfig) {
-        if (pointConfig == null) {
-            return false;
-        }
-        return true;
+        return pointConfig != null;
     }
 
     private void mergePoint(String userId, UserPointDetailDO userPointDetail) {
